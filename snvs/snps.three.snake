@@ -1,0 +1,72 @@
+import os
+
+if config == {}:
+    configfile: "config.json"
+
+REFERENCE = config["reference"]
+DATA_DIR = config["data_dir"] 
+FREEBAYES = config["freebayes"]
+DBSNP = config["dbsnp"]
+FAMILY_FILE = config["family_file"]
+DICT = config["dict"]
+OUT_DIR = config["out_dir"]
+GATK = config["gatk"]
+INTERVALS = config["intervals"]
+CAPTURE_BED = config["capture_bed"]
+
+#show samples to run
+FAMILIES = []
+with open(FAMILY_FILE) as f:
+    FAMILIES = f.read().splitlines()
+print(FAMILIES)
+
+rule all: 
+   input: expand("%s/{family}.fa.bam" % DATA_DIR, family = FAMILIES), expand("%s/{family}.family.freebayes.norm.vcf.gz" % OUT_DIR, family = FAMILIES), expand("%s/{family}.family.gatk.vcf.gz" % OUT_DIR, family = FAMILIES)
+   params: sge_opts="-l mfree=20G -N run_all"
+
+rule snp_run:
+    input: "%s/{family}.fa.bam"%DATA_DIR
+    output: "%s/{family}.family.freebayes.norm.vcf.gz"%OUT_DIR, "%s/{family}.family.gatk.vcf.gz"%OUT_DIR
+    benchmark: "{family}.freebayes.log"
+    params: prefix="{family}", sge_opts="-l h_rt=24:00:00,h_vmem=30G,disk_free=50G -N snp -cwd "
+    shell: """
+        sleep $[ ( $RANDOM % 20 )  + 1 ]m
+        chmod 700 $TMPDIR
+        module load modules modules-init modules-gs
+        module load tabix/0.2.6
+        module load bcftools/1.3.1
+        module load java/8u25
+        module load mpfr/3.1.0 gmp/5.0.2 mpc/0.8.2 gcc/4.9.1
+
+        rsync --bwlimit 20000 --copy-links -a {input} $TMPDIR/
+        rsync --bwlimit 20000 --copy-links -a {DATA_DIR}{params.prefix}.*.bam $TMPDIR/
+        rsync --bwlimit 20000 --copy-links -a {DATA_DIR}{params.prefix}.*.bai $TMPDIR/
+        rsync --bwlimit 20000 --copy-links -a {REFERENCE}* $TMPDIR/
+        rsync --bwlimit 20000 --copy-links -a {FREEBAYES} $TMPDIR/
+        rsync --bwlimit 20000 --copy-links -a {GATK} $TMPDIR/
+        rsync --bwlimit 20000 --copy-links -a {DBSNP}* $TMPDIR/
+        rsync --bwlimit 20000 --copy-links -a {DICT} $TMPDIR/
+
+        $TMPDIR/freebayes -f $TMPDIR/human_g1k_v37.fasta -b $TMPDIR/{params.prefix}.mo.bam -b $TMPDIR/{params.prefix}.p1.bam -t {CAPTURE_BED} --use-best-n-alleles 4 -C 2 -m 20 -q 20 $TMPDIR/{params.prefix}.fa.bam > $TMPDIR/{params.prefix}.family.freebayes.vcf
+
+        bgzip $TMPDIR/{params.prefix}.family.freebayes.vcf
+        tabix -p vcf $TMPDIR/{params.prefix}.family.freebayes.vcf.gz
+
+        bcftools norm $TMPDIR/{params.prefix}.family.freebayes.vcf.gz -c e -f {REFERENCE} -o $TMPDIR/{params.prefix}.family.freebayes.norm.vcf.gz -O z -s -m -both
+        tabix -p vcf $TMPDIR/{params.prefix}.family.freebayes.norm.vcf.gz
+        mv $TMPDIR/{params.prefix}.family.freebayes.norm.vcf.gz {OUT_DIR}
+        mv $TMPDIR/{params.prefix}.family.freebayes.norm.vcf.gz.tbi {OUT_DIR}
+        ls {output[0]}
+
+        java -Xmx25g -jar $TMPDIR/GenomeAnalysisTK.jar -T HaplotypeCaller -A AlleleBalanceBySample -A DepthPerAlleleBySample -A MappingQualityZeroBySample -A StrandBiasBySample -A Coverage -A FisherStrand -A HaplotypeScore -A MappingQualityRankSumTest -A MappingQualityZero -A QualByDepth -A RMSMappingQuality -A ReadPosRankSumTest -A VariantType -R $TMPDIR/human_g1k_v37.fasta --dbsnp $TMPDIR/dbsnp_138.b37.vcf.gz -o $TMPDIR/{params.prefix}.family.gatk.vcf -nct 1 -I $TMPDIR/{params.prefix}.fa.bam -I $TMPDIR/{params.prefix}.mo.bam -I $TMPDIR/{params.prefix}.p1.bam -L {INTERVALS}
+
+        bgzip $TMPDIR/{params.prefix}.family.gatk.vcf
+        tabix -p vcf $TMPDIR/{params.prefix}.family.gatk.vcf.gz
+
+        mv $TMPDIR/{params.prefix}.family.gatk.vcf.gz {OUT_DIR}
+        mv $TMPDIR/{params.prefix}.family.gatk.vcf.gz.tbi {OUT_DIR}
+        ls {output[1]}
+
+
+    """
+

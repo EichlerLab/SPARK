@@ -1,0 +1,12 @@
+{
+  "reference": "/path/to/human_g1k_v37.fasta",
+  "data_dir": "/path/to/family_bams/",
+  "freebayes": "/path/to/freebayes/bin/freebayes",
+  "dbsnp": "/path/to/dbsnp_138.b37.vcf.gz",
+  "family_file": "/path/to/family.ids.txt",
+  "dict": "/path/to/human_g1k_v37.dict",
+  "out_dir": "/path/to/output",
+  "gatk": "/path/to/GenomeAnalysisTK-3.7/GenomeAnalysisTK.jar",
+  "intervals": "/path/to/VCRome_2_1_hg19_capture_targets_short.intervals",
+  "capture_bed": "/path/to/VCRome_2_1_hg19_capture_targets_short.bed"
+}

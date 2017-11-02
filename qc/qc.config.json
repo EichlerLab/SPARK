@@ -1,0 +1,7 @@
+{
+  "reference": "/path/to/human_g1k_v37.fasta",
+  "data_dir": "/path/to/family_bams/",
+  "java": "/path/to/jre1.8.0_65/bin/java",
+  "picard": "/path/to/picard-tools-2.5.0/picard.jar",
+  "targets": "/path/to/VCRome_2_1_hg19_capture_targets_short.intervals"
+}
