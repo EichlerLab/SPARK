@@ -1,0 +1,60 @@
+import os
+
+if config == {}:
+    configfile: "config.json"
+
+REFERENCE = config["reference"]
+
+DATA_DIR = config["data_dir"]
+PICARD = config["picard"]
+TARGETS = config["targets"]
+JAVA = config["java"]
+
+SAMPLES = []
+for file in os.listdir(DATA_DIR):
+    if file.endswith(".bam"):
+        SAMPLES.append(str(file).split('.bam')[0])
+
+print(SAMPLES)
+
+rule all:
+    input: expand("%s/{sample}.bam" % DATA_DIR, sample = SAMPLES), expand("{sample}.flagstat.txt", sample = SAMPLES), expand("{sample}_hybridization_metrics.txt", sample = SAMPLES), expand("{sample}_per_target_coverage.txt", sample = SAMPLES)
+    params: sge_opts="-l mfree=20G -N run_all"
+
+rule flagstat:
+    input: "%s/{sample}.bam"%DATA_DIR
+    output: "{sample}.flagstat.txt"
+    log: "{sample}.flagstat.log"
+    params: sge_opts="-l mfree=20G,h_rt=24:00:00 -N run_flagstat -cwd"
+    shell: """
+    START=$(date +%s)
+    samtools flagstat {input} > {output}
+
+    END=$(date +%s)
+    DIFF=$(( $END - $START ))
+    echo "$DIFF" &> {log}
+
+    """
+
+rule hybridization_metrics:
+    input: "%s/{sample}.bam"%DATA_DIR
+    output: "{sample}_hybridization_metrics.txt", "{sample}_per_target_coverage.txt"
+    log: "{sample}.hybridization.metrics.log"
+    params: sge_opts="-l h_vmem=6G,h_rt=24:00:00 -N run_hyb_metrics -cwd"
+    shell: """
+    START=$(date +%s)
+    
+    {JAVA} -Xmx4g -XX:ParallelGCThreads=1 -jar {PICARD} CalculateHsMetrics REFERENCE_SEQUENCE={REFERENCE} INPUT={input} OUTPUT={output[0]} PER_TARGET_COVERAGE={output[1]} BAIT_INTERVALS={TARGETS} TARGET_INTERVALS={TARGETS} VALIDATION_STRINGENCY=LENIENT
+
+    END=$(date +%s)
+    DIFF=$(( $END - $START ))
+    echo "$DIFF" &> {log}
+
+    """
+rule clean:
+    shell: """
+    rm *summary
+    rm *sam
+
+    """
+
