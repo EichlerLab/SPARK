@@ -1,0 +1,39 @@
+import os
+
+if config == {}:
+    configfile: "read.depth.json"
+
+DATA_DIR = config["data_dir"]
+PICARD = config["picard"]
+REFERENCE = config["reference"]
+GATK = config["gatk"]
+TARGETS = config["targets"]
+
+SAMPLES = []
+for file in os.listdir(DATA_DIR):
+    if file.endswith(".bam"):
+        SAMPLES.append(str(file).split('.bam')[0])
+
+print(SAMPLES)
+
+rule all:
+        input: expand("%s/{sample}.bam"%DATA_DIR, sample = SAMPLES), expand("{sample}.DATA.sample_interval_statistics", sample=SAMPLES), expand("{sample}.DATA.sample_interval_summary", sample=SAMPLES), expand("{sample}.DATA.sample_statistics", sample=SAMPLES), expand("{sample}.DATA.sample_summary", sample=SAMPLES)
+        params: sge_opts="-l mfree=20G -N run_all" 
+
+rule get_read_depth:
+    input: "%s/{sample}.bam"%DATA_DIR
+    output: "{sample}.DATA.sample_interval_statistics", "{sample}.DATA.sample_interval_summary", "{sample}.DATA.sample_statistics", "{sample}.DATA.sample_summary"
+    params: prefix="{sample}", sge_opts="-l h_vmem=15G,h_rt=48:00:00 -cwd "
+    shell: """       
+        module load modules modules-init modules-gs
+        module load java/8u25
+        java -Xmx10G -jar {GATK} -T DepthOfCoverage -I {input} -L {TARGETS} -R {REFERENCE} -dt BY_SAMPLE -dcov 5000 -l INFO --omitDepthOutputAtEachBase --omitLocusTable --minBaseQuality 0 --minMappingQuality 20 --start 1 --stop 5000 --nBins 200 --includeRefNSites --countType COUNT_FRAGMENTS -o {params.prefix}.DATA
+        ls {output[0]}
+        ls {output[1]}
+        ls {output[2]}
+        ls {output[3]}
+        """
+
+
+
+

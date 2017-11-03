@@ -1,0 +1,56 @@
+import os
+
+if config == {}:
+    configfile: "mapping.json"
+
+DATA_DIR = config["data_dir"]
+REFERENCE = config["reference"]
+OUT_DIR = config["out_dir"]
+CONIFER = config["conifer"]
+PROBES = config["probes"]
+
+SAMPLES = []
+for file in os.listdir(DATA_DIR):
+        if file.endswith(".bam"):
+                SAMPLES.append(str(file).split('.bam')[0])
+print(SAMPLES)
+
+rule all:
+    input: expand("%s/{sample}.bam" % DATA_DIR, sample = SAMPLES), expand("%s/{sample}.mrsfast.rpkm.txt" % OUT_DIR, sample = SAMPLES)
+    params: sge_opts="-l mfree=20G -N run_all"
+
+rule rpkm:
+    input: "%s/{sample}.bam" % DATA_DIR
+    output: "%s/{sample}.mrsfast.rpkm.txt" % OUT_DIR
+    benchmark: "benchmarks/{sample}.mrsfast.mapped.for.read.count.log"
+    params: prefix="{sample}",sge_opts="-l h_vmem=4G,h_rt=24:00:00 -pe serial 4 -N mapRPKM -cwd "
+    shell: """
+        module purge
+        module load modules modules-init modules-gs modules-eichler/prod
+        module load mrsfast/3.3.8
+        module load samtools/1.3
+
+        sleep $[ ( $RANDOM % 10 )  + 1 ]m
+        chmod 700 $TMPDIR
+
+        rsync --bwlimit 20000 --copy-links -a {input}* $TMPDIR/
+        rsync --bwlimit 20000 --copy-links -a {REFERENCE}* $TMPDIR/
+        rsync --bwlimit 20000 --copy-links -a {CONIFER}/*py* $TMPDIR/
+
+        samtools fastq -F 0x100 -F 0x400 -F 0x800 $TMPDIR/{params.prefix}.bam | mrsfast --search $TMPDIR/hg19_masked --crop 36 -n 0 -e 2 --seq /dev/stdin -o $TMPDIR/{params.prefix}.mrsfast.sam --disable-nohit --threads 4 --mem 8 
+
+        samtools view -b $TMPDIR/{params.prefix}.mrsfast.sam > $TMPDIR/{params.prefix}.mrsfast.bam
+        samtools sort $TMPDIR/{params.prefix}.mrsfast.bam -T $TMPDIR/{params.prefix}.mrsfast.sort -o $TMPDIR/{params.prefix}.mrsfast.sort.bam
+        samtools index $TMPDIR/{params.prefix}.mrsfast.sort.bam
+
+        module load python/2.7.2
+        module load hdf5/1.8.3
+        module load pytables/2.3.1_hdf5-1.8.3
+        module load numpy/1.6.1
+
+        python $TMPDIR/conifer.py rpkm --probes {PROBES} --input $TMPDIR/{params.prefix}.mrsfast.sort.bam --output $TMPDIR/{params.prefix}.mrsfast.rpkm.txt
+
+        mv $TMPDIR/{params.prefix}.mrsfast.rpkm.txt {OUT_DIR}
+        ls {output}
+    """
+

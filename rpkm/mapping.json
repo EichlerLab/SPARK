@@ -1,0 +1,8 @@
+{
+  "data_dir": "/path/to/family_bams",
+  "out_dir": "/path/to/output",
+  "reference": "/path/to/hg19_masked",
+  "contigs": "/path/to/hg19_masked.fai",
+  "conifer": "/path/to/conifer_v0.2.2/",
+  "probes": "/path/to/VCRome_2_1_hg19_capture_targets_short.bed"
+}

@@ -1,2 +1,2 @@
 # SPARK
-This will be the repository for the EIchler lab SPARK analysis.
+This will be the repository for the Eichler lab SPARK analysis.

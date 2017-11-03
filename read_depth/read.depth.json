@@ -1,0 +1,7 @@
+{  
+  "data_dir": "/path/to/family_bams",
+  "picard": "/path/to/picard-tools-1.83/",
+  "reference": "/path/to/human_g1k_v37.fasta",
+  "gatk": "/path/to/GenomeAnalysisTK.jar",
+  "targets": "/path/to/annotation/VCRome_2_1_hg19_capture_targets_short.intervals"
+}
